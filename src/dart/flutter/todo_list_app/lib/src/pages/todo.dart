@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../model/TodoItem.dart';
 
 class TodoPage extends StatefulWidget {
   @override
@@ -8,6 +10,7 @@ class TodoPage extends StatefulWidget {
 }
 
 class TodoPageState extends State<TodoPage> {
+  SharedPreferences _prefs;
   TextEditingController _nametextController;
   TextEditingController _remarkextController;
   var todoList = <TodoItem>[];
@@ -20,33 +23,14 @@ class TodoPageState extends State<TodoPage> {
     initTodoListState();
   }
 
-  void initTodoListState() {
-    var initTodoList = """[
-      {
-        "title": "one",
-        "remark": "one' sub title."
-      },
-      {
-        "title": "two",
-        "remark": "two' sub title."
-      },
-      {
-        "title": "third",
-        "remark": "third' sub title."
-      },
-      {
-        "title": "four",
-        "remark": "four' sub title."
-      },
-      {
-        "title": "five",
-        "remark": "five' sub title."
-      }
-    ]""";
-
-    List<dynamic> list = jsonDecode(initTodoList);
-    list.forEach((item) {
-      todoList.add(TodoItem.fromJson(item));
+  // 初始化 todoList（从本地存储中获取 todo 页面创建任务后保存在本地的数据）
+  void initTodoListState() async {
+    _prefs = await SharedPreferences.getInstance();
+    setState(() {
+      var todoStrList = _prefs.getStringList('todoList') ?? [];
+      todoStrList.forEach((todoItemStr) {
+        todoList.add(TodoItem.fromJson(jsonDecode(todoItemStr)));
+      });
     });
   }
 
@@ -94,23 +78,24 @@ class TodoPageState extends State<TodoPage> {
             color: Colors.blue[500],
             textColor: Colors.white,
             onPressed: () {
-              print('current task title: ${_nametextController.text}');
-              print('current task remark: ${_remarkextController.text}');
+              // print('current task title: ${_nametextController.text}');
+              // print('current task remark: ${_remarkextController.text}');
               setState(() {
-                todoList.add(TodoItem.fromJson({
+                TodoItem todoItem = TodoItem.fromJson({
                   "title": _nametextController.text,
                   "remark": _remarkextController.text
-                }));
+                });
+                todoList.add(todoItem);
                 _nametextController.clear();
                 _remarkextController.clear();
+                var todoStrList = <String>[];
+                todoList.forEach((item) {
+                  todoStrList.add(jsonEncode(item));
+                });
+                // 创建任务后，将 todoList 最新状态存储在本地
+                _prefs.setStringList('todoList', todoStrList);
               });
             }),
-        RaisedButton(
-            child: Text('Print todo list JSON string'),
-            onPressed: () {
-              var jsonStr = jsonEncode(todoList);
-              print('current todo list json string:\n$jsonStr');
-            })
       ],
     );
   }
@@ -120,7 +105,7 @@ class TodoPageState extends State<TodoPage> {
         shrinkWrap: true,
         itemCount: todoList.length,
         itemBuilder: (context, i) {
-          var todoItem = todoList[i];
+          TodoItem todoItem = todoList[i];
           return ListTile(
             title: Text(todoItem.title,
                 style: TextStyle(
@@ -130,36 +115,23 @@ class TodoPageState extends State<TodoPage> {
             subtitle: Text(todoItem.remark),
             leading: Icon(Icons.check_box_outline_blank),
             onTap: () {
-              print('complete: ${todoItem.title}');
+              // print('complete: ${todoItem.title}');
               setState(() {
                 todoList.remove(todoItem);
+                var doneList = _prefs.getStringList('doneList') ?? [];
+                doneList.add(jsonEncode(todoItem));
+                // 完成任务后，基于本地存储中的 doneList，将该任务更新到 doneList 后再存储到本地
+                _prefs.setStringList('doneList', doneList);
+ 
+                var todoStrList = <String>[];
+                todoList.forEach((item) {
+                  todoStrList.add(jsonEncode(item));
+                });
+                // 完成任务后，将 todoList 最新状态存储在本地
+                _prefs.setStringList('todoList', todoStrList);
               });
             },
           );
         });
   }
-}
-
-class TodoItem {
-  String title;
-  String remark;
-
-  TodoItem(
-    this.title,
-    this.remark,
-  );
-
-  // TodoItem.fromJson(Map<String, dynamic> json)
-  //     : title = json['title'],
-  //       remark = json['remark'];
-  // The following code is the same as the above function
-  factory TodoItem.fromJson(Map<String, dynamic> json) {
-    return TodoItem(json['title'], json['remark']);
-  }
-
-  // jsonEncode method fallback
-  Map<String, dynamic> toJson() => {
-        'title': title,
-        'remark': remark,
-      };
 }
